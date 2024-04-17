@@ -31,119 +31,6 @@ Eigen::Matrix2d mat2eigen(const cv::Mat &mat)
     return mat_eigen;
 }
 
-void optimizeSingleFrame(
-    const vector<cv::Point2f *> &points_2d,
-    const cv::Mat &K,
-    vector<cv::Point3f *> &points_3d,
-    cv::Mat &pose_src,
-    bool is_fix_map_pts, bool is_update_map_pts)
-{
-    const cv::Mat pose_src0 = pose_src.clone();
-
-    // Change pose format from OpenCV to Sophus::SE3
-    cv::Mat T_cam_to_world_cv = pose_src.inv();
-    Sophus::SE3 T_cam_to_world = basics::transT_cv2sophus(T_cam_to_world_cv);
-
-    // Init g2o
-    typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 3>> Block;                                  // dim(pose) = 6, dim(landmark) = 3
-    Block::LinearSolverType *linearSolver = new g2o::LinearSolverCSparse<Block::PoseMatrixType>(); // solver for linear equation
-    Block *solver_ptr = new Block(linearSolver);                                                   // solver for matrix block
-    g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
-    g2o::SparseOptimizer optimizer;
-    optimizer.setAlgorithm(solver);
-
-    // -- Add vertex: parameters to optimize
-
-    // Camera pose
-    g2o::VertexSE3Expmap *pose = new g2o::VertexSE3Expmap(); // camera pose
-    pose->setId(0);
-    pose->setEstimate(g2o::SE3Quat(
-        T_cam_to_world.rotation_matrix(),
-        T_cam_to_world.translation()));
-
-    optimizer.addVertex(pose);
-
-    // Points pos in world frame
-    int index = 1;
-    vector<g2o::VertexSBAPointXYZ *> g2o_points_3d;
-    for (const cv::Point3f *p : points_3d) // landmarks
-    {
-        g2o::VertexSBAPointXYZ *point = new g2o::VertexSBAPointXYZ();
-        if (is_fix_map_pts)
-            point->setFixed(true);
-        point->setId(index++);
-        point->setEstimate(Eigen::Vector3d(p->x, p->y, p->z));
-        point->setMarginalized(true);
-        optimizer.addVertex(point);
-        g2o_points_3d.push_back(point);
-    }
-
-    // Parameter: camera intrinsics
-    g2o::CameraParameters *camera = new g2o::CameraParameters(
-        K.at<double>(0, 0), Eigen::Vector2d(K.at<double>(0, 2), K.at<double>(1, 2)), 0);
-    camera->setId(0);
-    optimizer.addParameter(camera);
-
-    // -- Add edges, which define the error/cost function.
-    index = 1;
-    for (const cv::Point2f *p : points_2d)
-    {
-        g2o::EdgeProjectXYZ2UV *edge = new g2o::EdgeProjectXYZ2UV();
-        edge->setId(index);
-        edge->setVertex(0, dynamic_cast<g2o::VertexSBAPointXYZ *>(optimizer.vertex(index)));
-        edge->setVertex(1, pose);
-        edge->setMeasurement(Eigen::Vector2d(p->x, p->y));
-        edge->setParameterId(0, 0);
-        edge->setInformation(Eigen::Matrix2d::Identity());
-        optimizer.addEdge(edge);
-        index++;
-    }
-
-    // -- Optimize
-    const bool is_print_time = false;
-    int optimize_iters = 50;
-    if (is_print_time)
-    {
-        std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-        optimizer.setVerbose(true);
-        optimizer.initializeOptimization();
-        optimizer.optimize(optimize_iters);
-        std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-        std::chrono::duration<double> time_used = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1);
-        cout << "optimization costs time: " << time_used.count() << " seconds." << endl;
-    }
-    else
-    {
-        optimizer.initializeOptimization();
-        optimizer.optimize(optimize_iters);
-    }
-
-    // -- Final: get the result from solver
-
-    // 1. Camera pose
-    T_cam_to_world = Sophus::SE3(
-        pose->estimate().rotation(),
-        pose->estimate().translation());
-    // Eigen::Matrix4d T_cam_to_world = Eigen::Isometry3d(pose->estimate()).matrix();
-    pose_src = basics::transT_sophus2cv(T_cam_to_world).inv(); // Change data format back to OpenCV
-
-    // 2. Points 3d world pos
-    int N = points_3d.size();
-    cv::Point3f point_src0(*points_3d[0]);
-    Eigen::Vector3d point_dst0 = g2o_points_3d[0]->estimate();
-    for (int i = 0; is_update_map_pts && i < N; i++)
-    {
-        Eigen::Vector3d p = g2o_points_3d[i]->estimate();
-        points_3d[i]->x = p(0, 0);
-        points_3d[i]->y = p(1, 0);
-        points_3d[i]->z = p(2, 0);
-    }
-
-    printf("Point 0: Before:{%.5f,%.5f,%.5f}, After:{%.5f,%.5f,%.5f}\n",
-           point_src0.x, point_src0.y, point_src0.z,
-           point_dst0(0, 0), point_dst0(1, 0), point_dst0(2, 0));
-}
-
 //------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------
@@ -179,10 +66,10 @@ void bundleAdjustment(
     bool is_fix_map_pts, bool is_update_map_pts)
 {
 
-    // Change pose format from OpenCV to Sophus::SE3
+    // Change pose format from OpenCV to Sophus::SE3<double>
     int num_frames = v_camera_g2o_poses.size();
-    // vector<Sophus::SE3, aligned_allocator<Sophus::SE3>> v_T_cam_to_world;
-    vector<Sophus::SE3> v_T_cam_to_world;
+    // vector<Sophus::SE3<double>, aligned_allocator<Sophus::SE3<double>>> v_T_cam_to_world;
+    vector<Sophus::SE3<double>> v_T_cam_to_world;
     for (int i = 0; i < num_frames; i++)
     {
         v_T_cam_to_world.push_back(
@@ -190,6 +77,7 @@ void bundleAdjustment(
     }
 
     // Init g2o
+    /*Old
     typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 3>> Block; // dim(pose) = 6, dim(landmark) = 3
     Block::LinearSolverType *linearSolver;
     // linearSolver = new g2o::LinearSolverCSparse<Block::PoseMatrixType>(); // solver for linear equation
@@ -198,6 +86,15 @@ void bundleAdjustment(
     g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
+    */
+
+    std::unique_ptr<g2o::BlockSolver_6_3::LinearSolverType> linear_solver = std::make_unique<g2o::LinearSolverDense<g2o::BlockSolver_6_3::PoseMatrixType>>();
+    g2o::OptimizationAlgorithmLevenberg solver(std::make_unique<g2o::BlockSolver_6_3>(std::move(linear_solver)));
+    solver.setUserLambdaInit(1);
+    // If the G2O_DELETE_IMPLICITLY_OWNED_OBJECTS define was set then g2o may try to free the
+    // solver.
+    g2o::SparseOptimizer optimizer;
+    optimizer.setAlgorithm(&solver);
 
     // -- Add vertex: parameters to optimize
     int vertex_id = 0;
@@ -210,7 +107,7 @@ void bundleAdjustment(
         // if (num_frames > 1 && ith_frame == num_frames - 1)
         // pose->setFixed(true); // Fix the last one -- which is the earliest frame
         pose->setEstimate(g2o::SE3Quat(
-            v_T_cam_to_world[ith_frame].rotation_matrix(),
+            v_T_cam_to_world[ith_frame].rotationMatrix(),
             v_T_cam_to_world[ith_frame].translation()));
         optimizer.addVertex(pose);
         g2o_poses.push_back(pose);
@@ -222,14 +119,14 @@ void bundleAdjustment(
     optimizer.addParameter(camera);
 
     // Points pos in world frame
-    std::unordered_map<int, g2o::VertexSBAPointXYZ *> g2o_points_3d;
+    std::unordered_map<int, g2o::VertexPointXYZ *> g2o_points_3d;
     std::unordered_map<int, int> pts3dID_to_vertexID;
     for (auto it = pts_3d.begin(); it != pts_3d.end(); it++) // landmarks
     {
         int pt3d_id = it->first;
         cv::Point3f *p = it->second;
 
-        g2o::VertexSBAPointXYZ *point = new g2o::VertexSBAPointXYZ();
+        g2o::VertexPointXYZ *point = new g2o::VertexPointXYZ();
         point->setId(vertex_id);
         if (is_fix_map_pts)
             point->setFixed(true);
@@ -258,7 +155,7 @@ void bundleAdjustment(
             g2o::EdgeProjectXYZ2UV *edge = new g2o::EdgeProjectXYZ2UV();
             edge->setId(edge_id++);
             edge->setVertex(0, // XYZ point
-                            dynamic_cast<g2o::VertexSBAPointXYZ *>(optimizer.vertex(pts3dID_to_vertexID[pt3d_id])));
+                            dynamic_cast<g2o::VertexPointXYZ *>(optimizer.vertex(pts3dID_to_vertexID[pt3d_id])));
             edge->setVertex(1, // camera pose
                             dynamic_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(ith_frame)));
 
@@ -297,7 +194,7 @@ void bundleAdjustment(
     // 1. Camera pose
     for (int i = 0; i < num_frames; i++)
     {
-        Sophus::SE3 T_cam_to_world = Sophus::SE3(
+        Sophus::SE3<double> T_cam_to_world = Sophus::SE3<double>(
             g2o_poses[i]->estimate().rotation(),
             g2o_poses[i]->estimate().translation());
         cv::Mat pose_src = basics::transT_sophus2cv(T_cam_to_world).inv(); // Change data format back to OpenCV

@@ -453,21 +453,11 @@ void VisualOdometry::callBundleAdjustment_()
     }
     // Bundle Adjustment
     cv::Mat pose_src = basics::getPosFromT(curr_->T_w_c_);
-    if (1)
-    {
-        optimization::bundleAdjustment(
-            v_pts_2d, v_pts_2d_to_3d_idx, curr_->camera_->K_,
-            um_pts_3d_in_prev_frames, v_camera_poses,
-            information_matrix,
-            is_ba_fix_map_points, is_ba_update_map_points);
-    }
-    else // This is a deprecated function. I will remove it later.
-    {
-        optimization::optimizeSingleFrame(
-            v_pts_2d[0], curr_->camera_->K_,
-            v_pts_3d_only_in_curr, curr_->T_w_c_,
-            is_ba_fix_map_points, is_ba_update_map_points); // Update pts_3d and curr_->T_w_c_
-    }
+    optimization::bundleAdjustment(
+        v_pts_2d, v_pts_2d_to_3d_idx, curr_->camera_->K_,
+        um_pts_3d_in_prev_frames, v_camera_poses,
+        information_matrix,
+        is_ba_fix_map_points, is_ba_update_map_points);
 
     // Print result
     cv::Mat pose_new = basics::getPosFromT(curr_->T_w_c_);

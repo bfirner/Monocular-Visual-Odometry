@@ -275,7 +275,7 @@ void extractPtsFromMatches(
 // ---------------- Other assistant functions ----------------
 // ----------------------------------------------------------------------------
 
-double ptPosInNormPlane(const cv::Point3f &pt_3d_pos_in_cam1,
+void ptPosInNormPlane(const cv::Point3f &pt_3d_pos_in_cam1,
                         const cv::Mat &R_cam2_to_cam1, const cv::Mat &t_cam2_to_cam1,
                         cv::Point2f &pt_pos_on_cam1_nplane, double &depth1,
                         cv::Point2f &pt_pos_on_cam2_nplane, double &depth2)

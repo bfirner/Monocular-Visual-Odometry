@@ -71,25 +71,14 @@ int main(int argc, char **argv)
     basics::makedirs(output_folder + "/");
 
     // -- Read image filenames
-    vector<string>
-        image_paths;
-    if (IS_DEBUGGING) // Read certain images specified below.
-    {
-        string folder = "/home/feiyu/Documents/Projects/EECS432_CV_VO/data/test_data/";
-        vector<string> tmp{
-            "image0001.jpg", "image0013.jpg", "image0015.jpg"};
-        for (string &filename : tmp)
-            filename = folder + filename;
-        image_paths = tmp;
-    }
-    else // Read the dataset configured in config.yaml file
-    {
-        const string dataset_dir = config_dataset.get<string>("dataset_dir");
-        const int num_images = config_dataset.get<int>("num_images");
-        constexpr bool is_print_res = false;
-        const string image_formatting = "/rgb_%05d.png";
-        image_paths = vo::readImagePaths(dataset_dir, num_images, image_formatting, is_print_res);
-    }
+    vector<string> image_paths;
+    // Read the dataset configured in config.yaml file
+    const string dataset_dir = config_dataset.get<string>("dataset_dir");
+    const int num_images = config_dataset.get<int>("num_images");
+    constexpr bool is_print_res = false;
+    //const string image_formatting = "/rgb_%05d.png";
+    const string image_formatting = config_dataset.get<string>("image_formatting");
+    image_paths = vo::readImagePaths(dataset_dir, num_images, image_formatting, is_print_res);
 
     // -- Read camera prameters.
     cv::Mat K = vo::readCameraIntrinsics(config_dataset); // camera intrinsics

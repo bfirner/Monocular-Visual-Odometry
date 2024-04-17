@@ -27,7 +27,7 @@ void estiMotionByEssential(
 );
 
 /* @brief Estimate camera motion by using Homography matrix.
- *      There might be 1 or 2 possible Homography matrices. Return them all. 
+ *      There might be 1 or 2 possible Homography matrices. Return them all.
  */
 void estiMotionByHomography(
     const vector<cv::Point2f> &pts_in_img1, const vector<cv::Point2f> &pts_in_img2,
@@ -110,7 +110,7 @@ void extractPtsFromMatches(
 
 /* Compute a point's pos on both cam1 and cam2's normalized plane.
  */
-double ptPosInNormPlane(const cv::Point3f &pt_3d_pos_in_cam1,
+void ptPosInNormPlane(const cv::Point3f &pt_3d_pos_in_cam1,
                         const cv::Mat &R_cam2_to_cam1, const cv::Mat &t_cam2_to_cam1,
                         cv::Point2f &pt_pos_on_cam1_nplane, double &depth1,
                         cv::Point2f &pt_pos_on_cam2_nplane, double &depth2);

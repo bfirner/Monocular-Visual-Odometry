@@ -144,7 +144,7 @@ double calcMeanDepth(const vector<cv::Point3f> &pts_3d)
     return mean_depth;
 }
 
-double scalePointPos(cv::Point3f &p, double scale)
+void scalePointPos(cv::Point3f &p, double scale)
 {
     p.x *= scale;
     p.y *= scale;

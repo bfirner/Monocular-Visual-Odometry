@@ -36,7 +36,7 @@ cv::Point3f preTranslatePoint3f(const cv::Point3f &p3x1, const cv::Mat &T4x4);
 cv::Mat skew(const cv::Mat &t); // 3x1 vec to 3x3 skew symmetric matrix
 double calcDist(const cv::Point2f &p1, const cv::Point2f &p2);
 double calcMeanDepth(const vector<cv::Point3f> &pts_3d);
-double scalePointPos(cv::Point3f &p, double scale);
+void scalePointPos(cv::Point3f &p, double scale);
 double calcMatNorm(const cv::Mat &mat);
 cv::Mat getNormalizedMat(const cv::Mat mat);
 double calcAngleBetweenTwoVectors(const cv::Mat &vec1, const cv::Mat &vec2);
